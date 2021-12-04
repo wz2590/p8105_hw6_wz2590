@@ -25,7 +25,7 @@ scale_fill_discrete = scale_fill_viridis_d
 
 ## Problem 1
 Load and clean the data for regression analysis (i.e. convert numeric to factor where appropriate, check for missing data, etc.).
-```{r}
+```{r message=FALSE, warning=FALSE}
 birthweight_clean = 
   readr::read_csv("data/birthweight.csv") %>%
   mutate(
@@ -45,7 +45,7 @@ birthweight_clean %>%
 There is no NA in this dataset. We can move on to the next step. 
 
 After some literature search, I will use scatter plots to browse some potential variables that may be correlated to the birth weight.
-```{r}
+```{r message=FALSE, warning=FALSE}
 birthweight_clean %>% 
   ggplot(aes(x = bhead, y = bwt)) + geom_point()
 
@@ -69,7 +69,7 @@ birthweight_clean %>%
 
 
 According to the trends shown in the scatter plots, I will choose the variables "baby’s head circumference at birth", "baby’s length at birth", "gestational age in weeks", and "mother's weight at delivery".
-```{r}
+```{r message=FALSE, warning=FALSE}
 proposed =
   lm(bwt ~ bhead + blength + gaweeks + delwt, data = birthweight_clean) 
 broom::tidy(proposed) %>% 
@@ -79,7 +79,7 @@ broom::tidy(proposed) %>%
 
 Now I will build a plot of model residuals against fitted values.
 
-```{r}
+```{r message=FALSE, warning=FALSE, dpi=300}
 birthweight_clean %>%
   add_residuals(proposed) %>%
   add_predictions(proposed) %>%
@@ -94,7 +94,7 @@ birthweight_clean %>%
 Other two models to compare with.
 Model 1: Using length at birth and gestational age as predictors (main effects only)
 Model 2: sing head circumference, length, sex, and all interactions (including the three-way interaction) between these
-```{r}
+```{r message=FALSE, warning=FALSE}
 model1 = lm(bwt ~ blength + gaweeks, data = birthweight_clean)
 
 model2 = lm(bwt ~bhead*blength + bhead*babysex + blength*babysex + bhead*blength*babysex , data = birthweight_clean)
@@ -106,7 +106,7 @@ broom::tidy(model2) %>%
     knitr::kable()
 ```
 
-```{r}
+```{r message=FALSE, warning=FALSE, dpi=300}
 birthweight_clean %>%
   add_residuals(model1) %>%
   add_predictions(model1) %>%
@@ -128,7 +128,7 @@ birthweight_clean %>%
 
 
 Perform cross validation.
-```{r}
+```{r message=FALSE, warning=FALSE}
 birthweight_CV =
   crossv_mc(birthweight_clean, 100) %>% 
   mutate(train = map(train, as_tibble),
@@ -142,7 +142,7 @@ birthweight_CV =
 ```
 
 
-```{r}
+```{r message=FALSE, warning=FALSE, dpi=300}
 birthweight_CV %>% 
   select(starts_with("rmse")) %>% 
   pivot_longer(
@@ -167,7 +167,7 @@ Model 2 has almost the same RMSE and fitting as my proposed model. Since model 2
 
 
 ## Problem 2
-```{r}
+```{r message=FALSE, warning=FALSE}
 weather_df = 
   rnoaa::meteo_pull_monitors(
     c("USW00094728"),
@@ -186,14 +186,14 @@ weather_df
 
 
 Write the function to generate our bootstrap functions.
-```{r}
+```{r message=FALSE, warning=FALSE}
 boot_sample = function(df) {
   sample_frac(df, replace = TRUE)
 }
 ```
 
 Run the 5000 boot straps.
-```{r}
+```{r message=FALSE, warning=FALSE}
 boot_straps = 
   tibble(
     strap_number = 1:5000,
@@ -202,7 +202,7 @@ boot_straps =
 ```
 
 Plot some of the bootstrap datasets.
-```{r}
+```{r message=FALSE, warning=FALSE, dpi=300}
 boot_straps %>% 
   filter(strap_number %in% 1:3) %>% 
   unnest(strap_sample) %>% 
@@ -216,7 +216,7 @@ boot_straps %>%
 ```
 
 Run the linear model with tmax as the response and tmin as the predictor on the bootstrap samples. 
-```{r}
+```{r message=FALSE, warning=FALSE}
 boot_straps = 
   weather_df %>% 
   bootstrap(n = 5000, id = "strap_number") %>% 
@@ -237,7 +237,7 @@ boot_straps =
 
 Plot the distribution of my estimates
 R-square:
-```{r}
+```{r message=FALSE, warning=FALSE, dpi=300}
 boot_straps %>% 
   ggplot(aes(x = r.squared)) +
   geom_density() + 
@@ -249,7 +249,7 @@ boot_straps %>%
 ```
 
 log(Beat0 * Beta1):
-```{r}
+```{r message=FALSE, warning=FALSE, dpi=300}
 boot_straps %>% 
   ggplot(aes(x = log.beta)) +
   geom_density() + 
@@ -264,7 +264,7 @@ Both the distribution of R_square and log(beta_0 * beta_1) are normal. The mean 
 The proposed tmax ~ tmin model has a good fit.
 
 
-```{r}
+```{r message=FALSE, warning=FALSE}
 boot_straps %>% 
   summarize(
     ci_lower = quantile(r.squared, 0.025), 
@@ -276,8 +276,8 @@ boot_straps %>%
     ci_upper = quantile(log.beta, 0.975))  
 ```
 
-We are 95% confident that the true value of R_squared is in the interval [0.894, 0.927].
-We are also 95% confident that the true value of log(beta_0 * beta_1) is in the interval [1.964, 2.059].
+We are 95% confident that the true value of R_squared is in the interval [0.89, 0.93].
+We are also 95% confident that the true value of log(beta_0 * beta_1) is in the interval [1.97, 2.06].
 
 
 
