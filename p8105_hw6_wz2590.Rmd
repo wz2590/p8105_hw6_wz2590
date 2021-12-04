@@ -68,7 +68,7 @@ birthweight_clean %>%
 
 
 
-According to the trends shown in the scatter plots, I will choose. I will choose the variables "baby’s head circumference at birth", "baby’s length at birth", "gestational age in weeks", and "mother's weight at delivery".
+According to the trends shown in the scatter plots, I will choose the variables "baby’s head circumference at birth", "baby’s length at birth", "gestational age in weeks", and "mother's weight at delivery".
 ```{r}
 proposed =
   lm(bwt ~ bhead + blength + gaweeks + delwt, data = birthweight_clean) 
@@ -136,9 +136,9 @@ birthweight_CV =
   mutate(proposed = map(train, ~proposed, data = .x),
            model1 = map(train, ~model1, data = .x),
            model2 = map(train, ~model2, data = .x)) %>% 
-    mutate(rmse_proposed = map2_dbl(proposed, test, ~rmse(model = .x, data = .y)),
-           rmse_model1 = map2_dbl(model1, test, ~rmse(model = .x, data =.y)),
-           rmse_model2 = map2_dbl(model2, test, ~rmse(model = .x, data = .y)))
+  mutate(rmse_proposed = map2_dbl(proposed, test, ~rmse(model = .x, data = .y)),
+         rmse_model1 = map2_dbl(model1, test, ~rmse(model = .x, data =.y)),
+         rmse_model2 = map2_dbl(model2, test, ~rmse(model = .x, data = .y)))
 ```
 
 
@@ -159,7 +159,126 @@ birthweight_CV %>%
       y = "Root Mean Squared Error")
 ```
 
-After cross-validation, I find out that my proposed model, which is the model that used "baby’s head circumference at birth", "baby’s length at birth", "gestational age in weeks" and "mother's weight at delivery", has the smallest RMSE and thus has the best fitting.
+After cross-validation, I find out that my proposed model, which is the model that used "baby’s head circumference at birth", "baby’s length at birth", "gestational age in weeks" and "mother's weight at delivery", has the smallest RMSE and thus has the best fitting.   
+Model 2 has almost the same RMSE and fitting as my proposed model. Since model 2 considers not only the babies' variables but also their interactions, model 2 may perform better in other larger datasets.
+
+
+
+
+
+## Problem 2
+```{r}
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2017-01-01",
+    date_max = "2017-12-31") %>%
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) %>%
+  select(name, id, everything())
+
+weather_df
+```
+
+
+
+Write the function to generate our bootstrap functions.
+```{r}
+boot_sample = function(df) {
+  sample_frac(df, replace = TRUE)
+}
+```
+
+Run the 5000 boot straps.
+```{r}
+boot_straps = 
+  tibble(
+    strap_number = 1:5000,
+    strap_sample = rerun(5000, boot_sample(weather_df))
+  )
+```
+
+Plot some of the bootstrap datasets.
+```{r}
+boot_straps %>% 
+  filter(strap_number %in% 1:3) %>% 
+  unnest(strap_sample) %>% 
+  ggplot(aes(x = tmin, y = tmax)) + 
+  geom_point(alpha = .5) +
+  stat_smooth(method = "lm", se = FALSE) +
+  facet_grid(~strap_number) +
+  labs(
+    title = "First Three Bootstrap Datasets"
+  )
+```
+
+Run the linear model with tmax as the response and tmin as the predictor on the bootstrap samples. 
+```{r}
+boot_straps = 
+  weather_df %>% 
+  bootstrap(n = 5000, id = "strap_number") %>% 
+  mutate(
+    model = map(strap, ~lm(tmax ~ tmin, data = .x)),
+    tidy_result = map(model, broom::tidy),
+    glance_result = map(model, broom::glance)) %>% 
+  unnest(tidy_result, glance_result) %>% 
+  select(strap_number, term, estimate, r.squared) %>% 
+  pivot_wider(
+    names_from = term, 
+    values_from = estimate) %>% 
+  rename("beta_0" = "(Intercept)", "beta_1" = "tmin") %>% 
+  mutate(log.beta = log(beta_0 * beta_1)) %>% 
+  select(strap_number, r.squared, log.beta)
+```
+
+
+Plot the distribution of my estimates
+R-square:
+```{r}
+boot_straps %>% 
+  ggplot(aes(x = r.squared)) +
+  geom_density() + 
+  labs(
+    title = "R_square Distribution",
+    x = "R_square",
+    y = "Density"
+  )
+```
+
+log(Beat0 * Beta1):
+```{r}
+boot_straps %>% 
+  ggplot(aes(x = log.beta)) +
+  geom_density() + 
+  labs(
+    title = "Log(beta_0 * beta_1) Distribution",
+    x = "log(beta_0 * beta_1)",
+    y = "Density"
+  )
+```
+
+Both the distribution of R_square and log(beta_0 * beta_1) are normal. The mean of R_square is around 0.91, and the mean of log(beta_0 * beta_1) is around 2.02.
+The proposed tmax ~ tmin model has a good fit.
+
+
+```{r}
+boot_straps %>% 
+  summarize(
+    ci_lower = quantile(r.squared, 0.025), 
+    ci_upper = quantile(r.squared, 0.975))  
+
+boot_straps %>% 
+  summarize(
+    ci_lower = quantile(log.beta, 0.025), 
+    ci_upper = quantile(log.beta, 0.975))  
+```
+
+We are 95% confident that the true value of R_squared is in the interval [0.894, 0.927].
+We are also 95% confident that the true value of log(beta_0 * beta_1) is in the interval [1.964, 2.059].
+
 
 
 
